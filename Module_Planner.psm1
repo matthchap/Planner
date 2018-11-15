@@ -3,6 +3,8 @@ $SqlDatabase = "dbmigrationplanner"
 $Username = "sqlroot"
 $Password = "+2sp=+2pb"
 
+YOYOYOYO
+
 #########################################################
 ##Log
 function Write-Log {
