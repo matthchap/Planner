@@ -85,22 +85,24 @@ Function New-PlannerWave() {
         [Parameter(Mandatory = $true)][int]$ScheduleTimeZone,
         [Parameter(Mandatory = $true)][int]$MaxNumberOfUsers,
         [Parameter(Mandatory = $false)][boolean]$DisableEmails = $false, # default
-        [Parameter(Mandatory = $false)][int]$Status = 1, # default
+        [Parameter(Mandatory = $false)][int]$Status = 0, # default "In Validation"
         [Parameter(Mandatory = $false)][boolean]$IsSalesUsers = $false, # default
         [Parameter(Mandatory = $false)][boolean]$IsVIP = $false, # default
         [Parameter(Mandatory = $false)][boolean]$IsPilot = $false # default
     )
 
-    $QueryPlannerWave = "set identity_insert dbo.waves ON
-                        Insert Into [dbo].[waves] (Name, ScheduledDate, MaxNumberOfUsers, IsPilot, IsSalesUsersOnly, IsVipOnly, Status, DisableEmails, ScheduleTimeZoneId) 
-                        VALUES ('$WaveName', '$ScheduledDate', '$MaxNumberOfUsers', '$IsPilot', '$IsSalesUsers', '$IsVIP', '$Status', '$DisableEmails', '$ScheduleTimeZone')
-                        set identity_insert dbo.waves OFF"
+    $QueryPlannerWave = "Insert Into [dbo].[waves] (Name, ScheduledDate, MaxNumberOfUsers, IsPilot, IsSalesUsersOnly, IsVipOnly, Status, DisableEmails, ScheduleTimeZoneId) 
+                        VALUES ('$WaveName', '$ScheduledDate', '$MaxNumberOfUsers', '$IsPilot', '$IsSalesUsers', '$IsVIP', '$Status', '$DisableEmails', '$ScheduleTimeZone')"
 
-    Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true 
-    
-    Write-Host "$WaveName has been successfully created." -ForegroundColor Green                      
+    try{
+        Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true   
+        Write-Host "$WaveName has been successfully created." -ForegroundColor Green  
+    } Catch {
+        Write-error "Unable to create $WaveName - $($error[0])"
+    }                   
 
 }
+
 Function Remove-PlannerWave() {
     param(
         [Parameter(Mandatory = $true)][string]$WaveName
@@ -186,16 +188,15 @@ Function Set-PlannerWave() {
 
 Function New-PlannerUser() {
     param(
+        [Parameter(Mandatory = $true )][string]$PrimarySmtpAddress,
         [Parameter(Mandatory = $false)][string]$SamAccountName,
-        [Parameter(Mandatory = $false)][int]$TechnicalId,
         [Parameter(Mandatory = $false)][string]$DisplayName,
         [Parameter(Mandatory = $false)][string]$FirstName,
         [Parameter(Mandatory = $false)][string]$LastName,
         [Parameter(Mandatory = $false)][string]$GivenName,
         [Parameter(Mandatory = $false)][string]$Sn,
-        [Parameter(Mandatory = $false)][string]$PrimarySmtpAddress,
         [Parameter(Mandatory = $false)][string]$PhysicalDeliveryOfficeName,
-        [Parameter(Mandatory = $false)][int]$MSDSConsistencyGuid,
+        #[Parameter(Mandatory = $false)][GUID]$MSDSConsistencyGuid,
         [Parameter(Mandatory = $false)][string]$DistinguishedName,
         [Parameter(Mandatory = $false)][datetime]$LastLogonTimestamp,
         [Parameter(Mandatory = $false)][string]$ObjectCategory,
@@ -222,15 +223,15 @@ Function New-PlannerUser() {
         [Parameter(Mandatory = $false)][boolean]$IsPilot  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsSalesUser  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsPriority  = $False, #Default
-        [Parameter(Mandatory = $false)][int]$MigrationStatus  = 1, #Default
-        [Parameter(Mandatory = $false)][int]$WaveId,
+        [Parameter(Mandatory = $false)][int]$MigrationStatus  = 0, #Default
+        #[Parameter(Mandatory = $false)][int]$WaveId = $NULL, #Default
         [Parameter(Mandatory = $false)][datetime]$WhenMailboxCreated,
         [Parameter(Mandatory = $false)][int]$RecipientTypeDetails,
         [Parameter(Mandatory = $false)][string]$Forest,
         [Parameter(Mandatory = $false)][string]$Domain,
         [Parameter(Mandatory = $false)][string]$Country,
         [Parameter(Mandatory = $false)][string]$Area,
-        [Parameter(Mandatory = $false)][int]$LanguageId,
+        [Parameter(Mandatory = $false)][int]$LanguageId = 1, #Default
         [Parameter(Mandatory = $false)][boolean]$IsSharedMailbox  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsResource  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsApplicativeMailbox  = $False, #Default
@@ -248,24 +249,37 @@ Function New-PlannerUser() {
     If ($Firstname -eq $null -or $Firstname -eq "") { $Firstname = $PrimarySmtpAddress.Split($separator)[0] }
     If ($Lastname -eq $null -or $Lastname -eq "") { $Lastname = $PrimarySmtpAddress.Split($separator)[1] }
 
-    $QueryPlannerUser = "set identity_insert dbo.users ON
-                        Insert Into [dbo].[users] (PrimarySmtpAddress, Lastname, Firstname, UserPrincipalName, Region, Country, CBU, IsPilot, VipLevel, IsEnabled, LanguageId) 
+    $QueryPlannerUser = "Insert Into [dbo].[users] 
+                        (
+                            SamAccountName,DisplayName,FirstName,LastName,GivenName,Sn,PrimarySmtpAddress,
+                            PhysicalDeliveryOfficeName,DistinguishedName,LastLogonTimestamp,ObjectCategory,
+                            Department,Title,Company,Description,Division,EmployeeID,Manager,TelephoneNumber,
+                            UserPrincipalName,Co,IsEnabled,VipLevel,MailboxSize,NumberOfArchives,ArchivesSize,
+                            NumberOfMissed,AbsentFrom,AbsentTo,Site,Entity,IsPilot,IsSalesUser,IsPriority,
+                            MigrationStatus,WhenMailboxCreated,RecipientTypeDetails,Forest,Domain,
+                            Country,Area,LanguageId,IsSharedMailbox,IsResource,IsApplicativeMailbox,Delegation,
+                            SiteName,HasDeviceMDM,Region,CBU,UserProfile      
+                        ) 
+
                         VALUES (
-                            '$SamAccountName','$TechnicalId','$DisplayName','$FirstName','$LastName','$GivenName','$Sn','$PrimarySmtpAddress',
-                            '$PhysicalDeliveryOfficeName','$MSDSConsistencyGuid','$DistinguishedName','$LastLogonTimestamp','$ObjectCategory',
+                            '$SamAccountName','$DisplayName','$FirstName','$LastName','$GivenName','$Sn','$PrimarySmtpAddress',
+                            '$PhysicalDeliveryOfficeName','$DistinguishedName','$LastLogonTimestamp','$ObjectCategory',
                             '$Department','$Title','$Company','$Description','$Division','$EmployeeID','$Manager','$TelephoneNumber',
                             '$UserPrincipalName','$Co','$IsEnabled','$VipLevel','$MailboxSize','$NumberOfArchives','$ArchivesSize',
                             '$NumberOfMissed','$AbsentFrom','$AbsentTo','$Site','$Entity','$IsPilot','$IsSalesUser','$IsPriority',
-                            '$MigrationStatus','$WaveId','$WhenMailboxCreated','$RecipientTypeDetails','$Forest','$Domain',
+                            '$MigrationStatus','$WhenMailboxCreated','$RecipientTypeDetails','$Forest','$Domain',
                             '$Country','$Area','$LanguageId','$IsSharedMailbox','$IsResource','$IsApplicativeMailbox','$Delegation',
-                            '$SiteName','$HasDeviceMDM','$Region','$CBU','$UserProfile',                            
-                        )
-                        set identity_insert dbo.users OFF"
-        
-    Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerUser -OutputSqlErrors:$true 
-    Write-Host "$PrimarySmtpAddress has been successfully created." -ForegroundColor Cyan             
-   
+                            '$SiteName','$HasDeviceMDM','$Region','$CBU','$UserProfile'                     
+                        )"        
+    
+    try{
+        Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerUser -OutputSqlErrors:$true 
+        Write-Host "$PrimarySmtpAddress has been successfully created." -ForegroundColor Green             
+    } Catch {
+        Write-error "Unable to create $PrimarySmtpAddress - $($error[0])"
+    }  
 }
+
 Function Remove-PlannerUser() {
     [cmdletbinding(SupportsShouldProcess,ConfirmImpact="High")] 
     param(
@@ -277,7 +291,12 @@ Function Remove-PlannerUser() {
                                 DELETE from dbo.users where primarysmtpaddress = '$Identity'"
     
     if ($PSCmdlet.ShouldProcess($Identity,"Removing")) {
-        Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryRemovePlannerWave -OutputSqlErrors:$true 
+        try{
+            Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryRemovePlannerWave -OutputSqlErrors:$true 
+            Write-Host "$PrimarySmtpAddress has been successfully Deleted." -ForegroundColor Green
+        } Catch {
+            Write-error "Unable to delete $PrimarySmtpAddress - $($error[0])"
+        }
     }
     
 }
