@@ -5,6 +5,7 @@ $Password = "+2sp=+2pb"
 
 #########################################################
 ##Log
+
 function Write-Log {
 
     [CmdletBinding()] 
@@ -78,6 +79,7 @@ function Write-Log {
 
 #########################################################
 ##Planner Wave
+
 Function New-PlannerWave() {
     param(
         [Parameter(Mandatory = $true)][string]$WaveName,
@@ -92,7 +94,8 @@ Function New-PlannerWave() {
     )
 
     $QueryPlannerWave = "Insert Into [dbo].[waves] (Name, ScheduledDate, MaxNumberOfUsers, IsPilot, IsSalesUsersOnly, IsVipOnly, Status, DisableEmails, ScheduleTimeZoneId) 
-                        VALUES ('$WaveName', '$ScheduledDate', '$MaxNumberOfUsers', '$IsPilot', '$IsSalesUsers', '$IsVIP', '$Status', '$DisableEmails', '$ScheduleTimeZone')"
+                        VALUES ('$WaveName', '$ScheduledDate', '$MaxNumberOfUsers', '$IsPilot', '$IsSalesUsers', '$IsVIP', '$Status', '$DisableEmails', '$ScheduleTimeZone')
+                        Select * from dbo.waves where name = '$WaveName'"
 
     try{
         Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true   
@@ -115,6 +118,7 @@ Function Remove-PlannerWave() {
     Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true 
  
 }
+
 Function Get-PlannerWave() {
     param(
         [Parameter(Mandatory = $false)][string]$WaveName
@@ -126,6 +130,7 @@ Function Get-PlannerWave() {
     Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryGetPlannerWave -OutputSqlErrors:$true 
  
 }
+
 Function Set-PlannerWave() {
     param(
         [Parameter(Mandatory = $true)][string]$WaveName,
@@ -185,7 +190,6 @@ Function Set-PlannerWave() {
 #########################################################
 #Planner User
 
-
 Function New-PlannerUser() {
     param(
         [Parameter(Mandatory = $true )][string]$PrimarySmtpAddress,
@@ -224,14 +228,13 @@ Function New-PlannerUser() {
         [Parameter(Mandatory = $false)][boolean]$IsSalesUser  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsPriority  = $False, #Default
         [Parameter(Mandatory = $false)][int]$MigrationStatus  = 0, #Default
-        #[Parameter(Mandatory = $false)][int]$WaveId = $NULL, #Default
+        [Parameter(Mandatory = $false)][int]$WaveName,
         [Parameter(Mandatory = $false)][datetime]$WhenMailboxCreated,
         [Parameter(Mandatory = $false)][int]$RecipientTypeDetails,
         [Parameter(Mandatory = $false)][string]$Forest,
         [Parameter(Mandatory = $false)][string]$Domain,
         [Parameter(Mandatory = $false)][string]$Country,
-        [Parameter(Mandatory = $false)][string]$Area,
-        [Parameter(Mandatory = $false)][int]$LanguageId = 1, #Default
+        [Parameter(Mandatory = $false)][string]$Area,       
         [Parameter(Mandatory = $false)][boolean]$IsSharedMailbox  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsResource  = $False, #Default
         [Parameter(Mandatory = $false)][boolean]$IsApplicativeMailbox  = $False, #Default
@@ -240,16 +243,29 @@ Function New-PlannerUser() {
         [Parameter(Mandatory = $false)][boolean]$HasDeviceMDM,
         [Parameter(Mandatory = $false)][string]$Region,
         [Parameter(Mandatory = $false)][string]$CBU,
-        [Parameter(Mandatory = $false)][string]$UserProfile
+        [Parameter(Mandatory = $false)][string]$UserProfile,
+        [Parameter(Mandatory = $false)][string]$languageName
         
     )
 
-    If ($UserPrincipalName -eq $null -or $UserPrincipalName -eq "") { $UserPrincipalName = "$PrimarySmtpAddress" }
-    $separator = ".","@"
-    If ($Firstname -eq $null -or $Firstname -eq "") { $Firstname = $PrimarySmtpAddress.Split($separator)[0] }
-    If ($Lastname -eq $null -or $Lastname -eq "") { $Lastname = $PrimarySmtpAddress.Split($separator)[1] }
+    if (!$languageName) {$languageID = 1}
+    Else {$SQLQueryLanguage = "Select TechnicalID from dbo.languages where languageName = '$language'"
+            $LanguageID = Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $SQLQueryLanguage -OutputSqlErrors:$true
+         }
+     
+    if ($WaveName)
+         {$SQLQueryLWaveID = "Select TechnicalID from dbo.waves where name = '$WaveName'"
+            $WaveID = Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $SQLQueryLWaveID -OutputSqlErrors:$true
+         }
 
-    $QueryPlannerUser = "Insert Into [dbo].[users] 
+    #Pas une bonne idée à mon avis - Si ce n'est pas remplit, c'est peut etre qu'il y'a une raison 
+        #If ($UserPrincipalName -eq $null -or $UserPrincipalName -eq "") { $UserPrincipalName = "$PrimarySmtpAddress" }
+        #$separator = ".","@"
+        #If ($Firstname -eq $null -or $Firstname -eq "") { $Firstname = $PrimarySmtpAddress.Split($separator)[0] }
+        #If ($Lastname -eq $null -or $Lastname -eq "") { $Lastname = $PrimarySmtpAddress.Split($separator)[1] }
+
+    if ($WaveName)
+       {$QueryPlannerUser = "Insert Into [dbo].[users] 
                         (
                             SamAccountName,DisplayName,FirstName,LastName,GivenName,Sn,PrimarySmtpAddress,
                             PhysicalDeliveryOfficeName,DistinguishedName,LastLogonTimestamp,ObjectCategory,
@@ -270,7 +286,31 @@ Function New-PlannerUser() {
                             '$MigrationStatus','$WhenMailboxCreated','$RecipientTypeDetails','$Forest','$Domain',
                             '$Country','$Area','$LanguageId','$IsSharedMailbox','$IsResource','$IsApplicativeMailbox','$Delegation',
                             '$SiteName','$HasDeviceMDM','$Region','$CBU','$UserProfile'                     
-                        )"        
+                        )
+                        select * from dbo.users where primarysmtpaddress = '$PrimarySmtpAddress'"}
+    Else {$QueryPlannerUser = "Insert Into [dbo].[users] 
+                        (
+                            SamAccountName,DisplayName,FirstName,LastName,GivenName,Sn,PrimarySmtpAddress,
+                            PhysicalDeliveryOfficeName,DistinguishedName,LastLogonTimestamp,ObjectCategory,
+                            Department,Title,Company,Description,Division,EmployeeID,Manager,TelephoneNumber,
+                            UserPrincipalName,Co,IsEnabled,VipLevel,MailboxSize,NumberOfArchives,ArchivesSize,
+                            NumberOfMissed,AbsentFrom,AbsentTo,Site,Entity,IsPilot,IsSalesUser,IsPriority,
+                            MigrationStatus,WhenMailboxCreated,RecipientTypeDetails,Forest,Domain,
+                            Country,Area,LanguageId,IsSharedMailbox,IsResource,IsApplicativeMailbox,Delegation,
+                            SiteName,HasDeviceMDM,Region,CBU,UserProfile,WaveID     
+                        ) 
+
+                        VALUES (
+                            '$SamAccountName','$DisplayName','$FirstName','$LastName','$GivenName','$Sn','$PrimarySmtpAddress',
+                            '$PhysicalDeliveryOfficeName','$DistinguishedName','$LastLogonTimestamp','$ObjectCategory',
+                            '$Department','$Title','$Company','$Description','$Division','$EmployeeID','$Manager','$TelephoneNumber',
+                            '$UserPrincipalName','$Co','$IsEnabled','$VipLevel','$MailboxSize','$NumberOfArchives','$ArchivesSize',
+                            '$NumberOfMissed','$AbsentFrom','$AbsentTo','$Site','$Entity','$IsPilot','$IsSalesUser','$IsPriority',
+                            '$MigrationStatus','$WhenMailboxCreated','$RecipientTypeDetails','$Forest','$Domain',
+                            '$Country','$Area','$LanguageId','$IsSharedMailbox','$IsResource','$IsApplicativeMailbox','$Delegation',
+                            '$SiteName','$HasDeviceMDM','$Region','$CBU','$UserProfile','$WaveID'                     
+                        )
+                        select * from dbo.users where primarysmtpaddress = '$PrimarySmtpAddress'"}     
     
     try{
         Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerUser -OutputSqlErrors:$true 
@@ -300,25 +340,37 @@ Function Remove-PlannerUser() {
     }
     
 }
+
 Function Get-PlannerUser() {
     param(
-        [Parameter(Mandatory = $false)][string]$Identity
+        [Parameter(Mandatory = $false)][string]$Identity, 
+        [Parameter(Mandatory = $false)][string]$AllProperties = $False #Default, 
     )
+
+    if ($AllProperties = $True) {$Properties = "*"}
+    else {$Properties = "Primarysmtpaddress, FirstName, LastName, Entity"}
   
-    If ($Identity -eq $null -or $Identity -eq "") {$QueryGetPlannerUser = "Select * from  [dbo].[Users];"}
-    Else { $QueryGetPlannerUser = "Select * from  [dbo].[Users] WHERE PrimarySmtpAddress = '$Identity'"}
+    If ($Identity -eq $null -or $Identity -eq "") {
+        $QueryGetPlannerUser = "Select $Properties from  [dbo].[Users];"
+        }
+    Else{
+        $QueryGetPlannerUser = "Select $Properties from  [dbo].[Users] WHERE PrimarySmtpAddress = '$Identity'"
+        }
 
     Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryGetPlannerUser -OutputSqlErrors:$true 
  
 }
+
 Function Set-PlannerUser() {
 
 }
 
 ########################################################
 #Planner User's wave
+
 Function New-PlannerUserWave() {
 }
+
 Function Remove-PlannerUserWave() {
     [cmdletbinding(SupportsShouldProcess, ConfirmImpact = "High")]   
     param(
@@ -335,6 +387,7 @@ Function Remove-PlannerUserWave() {
     }
 
 }
+
 Function Get-PlannerUserWave() {
     param(
         [Parameter(Mandatory = $true)][string]$Identity
@@ -364,6 +417,7 @@ Function Get-PlannerUserWave() {
 
     $PlannerUserWave
 }
+
 Function Set-PlannerUserWave() {
     param(
         [Parameter(Mandatory = $true)][string]$Identity,
