@@ -103,10 +103,10 @@ Function New-PlannerWave() {
     } Catch {
         Write-error "Unable to create $WaveName - $($error[0])"
     }                   
-
 }
 
 Function Remove-PlannerWave() {
+    [cmdletbinding(SupportsShouldProcess,ConfirmImpact="High")] 
     param(
         [Parameter(Mandatory = $true)][string]$WaveName
     )
@@ -115,8 +115,14 @@ Function Remove-PlannerWave() {
     "DELETE [dbo].[Waves]
     WHERE name = '$WaveName'"
 
-    Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true 
- 
+    if ($PSCmdlet.ShouldProcess($WaveName,"Removing")) {
+        try{
+            Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $queryPlannerWave -OutputSqlErrors:$true 
+            Write-Host "$WaveName has been successfully Removed." -ForegroundColor Green  
+        } Catch {
+            Write-error "Unable to remove $WaveName - $($error[0])"
+        }
+    }        
 }
 
 Function Get-PlannerWave() {
@@ -127,8 +133,11 @@ Function Get-PlannerWave() {
     If ($WaveName -eq $null -or $WaveName -eq "") {$QueryGetPlannerWave = "Select * from  [dbo].[Waves];"}
     Else { $QueryGetPlannerWave = "Select * from  [dbo].[Waves] WHERE Name = '$WaveName'"}
 
-    Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryGetPlannerWave -OutputSqlErrors:$true 
- 
+    try{
+        Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryGetPlannerWave -OutputSqlErrors:$true 
+    } Catch {
+        Write-error "Unable to get wave $WaveName - $($error[0])"
+    }
 }
 
 Function Set-PlannerWave() {
@@ -185,6 +194,63 @@ Function Set-PlannerWave() {
    ELSE {$QueryUpdatePlannerWaveDisableEmails = $null} 
    Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryUpdatePlannerWaveDisableEmails -OutputSqlErrors:$true 
 
+}
+
+Function Set-PlannerWave-2() {
+    [cmdletbinding(SupportsShouldProcess,ConfirmImpact="High")] 
+    param(
+        [Parameter(Mandatory = $true)][string]$WaveName,
+        [Parameter(Mandatory = $false)][string]$NewWaveName,
+        [Parameter(Mandatory = $false)][datetime]$NewScheduledDate,
+        [Parameter(Mandatory = $false)][int]$NewMaxNumberOfUSers,
+        [Parameter(Mandatory = $false)][int]$NewStatus,
+        [Parameter(Mandatory = $false)][int]$NewScheduleTimeZoneId,
+        [Parameter(Mandatory = $false)][boolean]$IsPilot,
+        [Parameter(Mandatory = $false)][boolean]$IsSalesUsers,
+        [Parameter(Mandatory = $false)][boolean]$IsVIP,
+        [Parameter(Mandatory = $false)][boolean]$DisableEmails
+    )
+
+    $GetWaveQuery = "SELECT * FROM [dbo].[Waves] WHERE Name = '$WaveName'"
+    
+    try{
+        $WaveInformation = Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $GetWaveQuery -OutputSqlErrors:$true
+    } Catch {
+        Write-error "Unable to get wave $WaveName - $($error[0])"
+        Break
+    }
+
+    if (!$NewWaveName)              {$NewWaveName           = $WaveInformation.name}
+    if (!$NewScheduledDate)         {$NewScheduledDate      = $WaveInformation.ScheduledDate}
+    if (!$NewMaxNumberOfUSers)      {$NewMaxNumberOfUSers   = $WaveInformation.MaxNumberOfUSers}
+    if (!$NewStatus)                {$NewStatus             = $WaveInformation.Status}
+    if (!$NewScheduleTimeZoneId)    {$NewScheduleTimeZoneId = $WaveInformation.ScheduleTimeZoneId}
+    if (!$IsPilot)                  {$IsPilot               = $WaveInformation.IsPilot}
+    if (!$IsSalesUsers)             {$IsSalesUsers          = $WaveInformation.IsSalesUsers}
+    if (!$IsVIP)                    {$IsVIP                 = $WaveInformation.IsVIP}
+    if (!$DisableEmails)            {$DisableEmails         = $WaveInformation.DisableEmails}
+
+    $QueryUpdatePlannerWave = "UPDATE [dbo].[waves] SET 
+                                    Name                = '$NewWaveName',
+                                    ScheduledDate       = '$NewScheduledDate',
+                                    MaxNumberOfUSers    = '$NewMaxNumberOfUSers',
+                                    Status              = '$NewStatus',
+                                    ScheduleTimeZoneId  = '$NewScheduleTimeZoneId',
+                                    IsPilot             = '$IsPilot',
+                                    IsSalesUsers        = '$IsSalesUsers',
+                                    IsVIP               = '$IsVIP',
+                                    DisableEmails       = '$DisableEmails',
+                                WHERE name          = '$WaveName'"
+    
+    
+    if ($PSCmdlet.ShouldProcess($WaveName,"Updating")) {
+        try{
+            Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryUpdatePlannerWave -OutputSqlErrors:$true 
+            Write-Host "$WaveName has been successfully updated." -ForegroundColor Green             
+        } Catch {
+            Write-error "Unable to update $WaveName - $($error[0])"
+        }
+    }          
 }
 
 #########################################################
@@ -257,12 +323,6 @@ Function New-PlannerUser() {
          {$SQLQueryLWaveID = "Select TechnicalID from dbo.waves where name = '$WaveName'"
             $WaveID = Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $SQLQueryLWaveID -OutputSqlErrors:$true
          }
-
-    #Pas une bonne idée à mon avis - Si ce n'est pas remplit, c'est peut etre qu'il y'a une raison 
-        #If ($UserPrincipalName -eq $null -or $UserPrincipalName -eq "") { $UserPrincipalName = "$PrimarySmtpAddress" }
-        #$separator = ".","@"
-        #If ($Firstname -eq $null -or $Firstname -eq "") { $Firstname = $PrimarySmtpAddress.Split($separator)[0] }
-        #If ($Lastname -eq $null -or $Lastname -eq "") { $Lastname = $PrimarySmtpAddress.Split($separator)[1] }
 
     if ($WaveName)
        {$QueryPlannerUser = "Insert Into [dbo].[users] 
@@ -436,4 +496,43 @@ Function Set-PlannerUserWave() {
     "
     Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QuerySetPlannerUserWave -OutputSqlErrors:$true 
 
+}
+
+########################################################
+#Planner Country
+Function New-PlannerCountry() {
+    param(
+        [Parameter(Mandatory = $true)][string]$name
+    )
+ 
+
+    $QueryNewCountry = "Insert into dbo.countries (Name) Values ($name)
+                        select * from dbo.countries where name = $Name
+                        "
+    
+    try{
+        Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryNewCountry -OutputSqlErrors:$true 
+        Write-Host "$Name has been successfully added." -ForegroundColor Green
+    } Catch {
+        Write-error "Unable to add $Name - $($error[0])"
+    }
+
+}
+
+Function Remove-PlannerCountry() {
+    [cmdletbinding(SupportsShouldProcess, ConfirmImpact = "High")]   
+    param(
+        [Parameter(Mandatory = $true)][string]$name
+    )
+ 
+    $QueryNewCountry = "delete from dbo.countries (Name) where name = $Name"
+    
+    if ($PSCmdlet.ShouldProcess($Name, "Removing Country")) {
+        try{
+            Invoke-Sqlcmd -ServerInstance "$SqlServer" -Database "$SqlDatabase" -Username "$Username" -Password "$Password" -Query $QueryNewCountry -OutputSqlErrors:$true 
+            Write-Host "$Name has been successfully removed." -ForegroundColor Green
+        } Catch {
+            Write-error "Unable to remove $Name - $($error[0])"
+        }
+    }
 }
